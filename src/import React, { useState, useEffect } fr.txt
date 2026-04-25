@@ -1,0 +1,648 @@
+import React, { useState, useEffect } from "react";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  name: string;
+  age: string;
+  weight: string;
+  weightUnit: "kg" | "lbs";
+  height: string;
+  heightUnit: "cm" | "ft";
+  fitnessGoal: "weight_loss" | "muscle_gain" | "maintain" | "";
+  fitnessLevel: "beginner" | "intermediate" | "advanced" | "";
+}
+
+const PROFILE_KEY = "hardreps_user_profile";
+
+export const getStoredProfile = (): UserProfile | null => {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveProfile = (profile: UserProfile): void => {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+};
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+const GOALS = [
+  {
+    id: "weight_loss",
+    label: "Weight Loss",
+    icon: "🔥",
+    desc: "Burn fat, get lean",
+  },
+  {
+    id: "muscle_gain",
+    label: "Muscle Gain",
+    icon: "💪",
+    desc: "Build strength & mass",
+  },
+  {
+    id: "maintain",
+    label: "Maintain",
+    icon: "⚖️",
+    desc: "Stay fit & healthy",
+  },
+] as const;
+
+const LEVELS = [
+  {
+    id: "beginner",
+    label: "Beginner",
+    icon: "🌱",
+    desc: "Less than 1 year",
+  },
+  {
+    id: "intermediate",
+    label: "Intermediate",
+    icon: "⚡",
+    desc: "1–3 years of training",
+  },
+  {
+    id: "advanced",
+    label: "Advanced",
+    icon: "🏆",
+    desc: "3+ years, consistent",
+  },
+] as const;
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+interface ProfileSetupProps {
+  onComplete: (profile: UserProfile) => void;
+  existingProfile?: UserProfile | null;
+}
+
+const STEPS = ["basics", "goals", "level"] as const;
+type Step = (typeof STEPS)[number];
+
+const ProfileSetup: React.FC<ProfileSetupProps> = ({
+  onComplete,
+  existingProfile,
+}) => {
+  const [step, setStep] = useState<Step>("basics");
+  const [errors, setErrors] = useState<Partial<Record<keyof UserProfile, string>>>({});
+
+  const [profile, setProfile] = useState<UserProfile>(() =>
+    existingProfile ?? {
+      name: "",
+      age: "",
+      weight: "",
+      weightUnit: "kg",
+      height: "",
+      heightUnit: "cm",
+      fitnessGoal: "",
+      fitnessLevel: "",
+    }
+  );
+
+  const set = <K extends keyof UserProfile>(key: K, val: UserProfile[K]) => {
+    setProfile((p) => ({ ...p, [key]: val }));
+    setErrors((e) => ({ ...e, [key]: undefined }));
+  };
+
+  // ── Validation ──────────────────────────────────────────────────────────────
+
+  const validateBasics = (): boolean => {
+    const e: typeof errors = {};
+    if (!profile.name.trim()) e.name = "Name is required";
+    const age = Number(profile.age);
+    if (!profile.age || isNaN(age) || age < 10 || age > 100)
+      e.age = "Enter a valid age (10–100)";
+    const weight = Number(profile.weight);
+    if (!profile.weight || isNaN(weight) || weight < 20 || weight > 400)
+      e.weight = "Enter a valid weight";
+    const height = Number(profile.height);
+    if (!profile.height || isNaN(height) || height < 50 || height > 300)
+      e.height = "Enter a valid height";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const validateGoal = (): boolean => {
+    if (!profile.fitnessGoal) {
+      setErrors({ fitnessGoal: "Please select a goal" });
+      return false;
+    }
+    return true;
+  };
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
+
+  const next = () => {
+    if (step === "basics" && !validateBasics()) return;
+    if (step === "goals" && !validateGoal()) return;
+    const idx = STEPS.indexOf(step);
+    if (idx < STEPS.length - 1) setStep(STEPS[idx + 1]);
+  };
+
+  const back = () => {
+    const idx = STEPS.indexOf(step);
+    if (idx > 0) setStep(STEPS[idx - 1]);
+  };
+
+  const handleFinish = () => {
+    if (!profile.fitnessLevel) {
+      setErrors({ fitnessLevel: "Please select a level" });
+      return;
+    }
+    saveProfile(profile);
+    onComplete(profile);
+  };
+
+  const stepIndex = STEPS.indexOf(step);
+  const progress = ((stepIndex + 1) / STEPS.length) * 100;
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <div style={styles.root}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.logoRow}>
+          <span style={styles.logoIcon}>🏋️</span>
+          <span style={styles.logoText}>HardReps</span>
+        </div>
+        <h1 style={styles.headline}>
+          {step === "basics" && "Let's get started"}
+          {step === "goals" && "What's your goal?"}
+          {step === "level" && "Your fitness level"}
+        </h1>
+        <p style={styles.sub}>
+          {step === "basics" && "Tell us about yourself"}
+          {step === "goals" && "We'll personalise your plan"}
+          {step === "level" && "So we match the right intensity"}
+        </p>
+
+        {/* Progress bar */}
+        <div style={styles.progressTrack}>
+          <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+        </div>
+        <div style={styles.stepLabel}>
+          Step {stepIndex + 1} of {STEPS.length}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={styles.body}>
+        {step === "basics" && (
+          <BasicsStep profile={profile} set={set} errors={errors} />
+        )}
+        {step === "goals" && (
+          <GoalsStep profile={profile} set={set} errors={errors} />
+        )}
+        {step === "level" && (
+          <LevelStep profile={profile} set={set} errors={errors} />
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={styles.footer}>
+        {stepIndex > 0 && (
+          <button style={styles.btnSecondary} onClick={back}>
+            Back
+          </button>
+        )}
+        {step !== "level" ? (
+          <button style={styles.btnPrimary} onClick={next}>
+            Continue →
+          </button>
+        ) : (
+          <button style={styles.btnPrimary} onClick={handleFinish}>
+            Start Training 🚀
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Step: Basics ─────────────────────────────────────────────────────────────
+
+interface StepProps {
+  profile: UserProfile;
+  set: <K extends keyof UserProfile>(key: K, val: UserProfile[K]) => void;
+  errors: Partial<Record<keyof UserProfile, string>>;
+}
+
+const BasicsStep: React.FC<StepProps> = ({ profile, set, errors }) => (
+  <div style={styles.fields}>
+    {/* Name */}
+    <div style={styles.fieldGroup}>
+      <label style={styles.label}>Full Name</label>
+      <input
+        style={errors.name ? styles.inputError : styles.input}
+        type="text"
+        placeholder="e.g. Rahul Sharma"
+        value={profile.name}
+        onChange={(e) => set("name", e.target.value)}
+      />
+      {errors.name && <span style={styles.errorMsg}>{errors.name}</span>}
+    </div>
+
+    {/* Age */}
+    <div style={styles.fieldGroup}>
+      <label style={styles.label}>Age</label>
+      <input
+        style={errors.age ? styles.inputError : styles.input}
+        type="number"
+        placeholder="e.g. 25"
+        min={10}
+        max={100}
+        value={profile.age}
+        onChange={(e) => set("age", e.target.value)}
+      />
+      {errors.age && <span style={styles.errorMsg}>{errors.age}</span>}
+    </div>
+
+    {/* Weight */}
+    <div style={styles.fieldGroup}>
+      <label style={styles.label}>Weight</label>
+      <div style={styles.inputRow}>
+        <input
+          style={{
+            ...(errors.weight ? styles.inputError : styles.input),
+            flex: 1,
+          }}
+          type="number"
+          placeholder={profile.weightUnit === "kg" ? "e.g. 75" : "e.g. 165"}
+          value={profile.weight}
+          onChange={(e) => set("weight", e.target.value)}
+        />
+        <UnitToggle
+          options={["kg", "lbs"]}
+          value={profile.weightUnit}
+          onChange={(v) => set("weightUnit", v as "kg" | "lbs")}
+        />
+      </div>
+      {errors.weight && <span style={styles.errorMsg}>{errors.weight}</span>}
+    </div>
+
+    {/* Height */}
+    <div style={styles.fieldGroup}>
+      <label style={styles.label}>Height</label>
+      <div style={styles.inputRow}>
+        <input
+          style={{
+            ...(errors.height ? styles.inputError : styles.input),
+            flex: 1,
+          }}
+          type="number"
+          placeholder={profile.heightUnit === "cm" ? "e.g. 175" : "e.g. 5.9"}
+          value={profile.height}
+          onChange={(e) => set("height", e.target.value)}
+        />
+        <UnitToggle
+          options={["cm", "ft"]}
+          value={profile.heightUnit}
+          onChange={(v) => set("heightUnit", v as "cm" | "ft")}
+        />
+      </div>
+      {errors.height && <span style={styles.errorMsg}>{errors.height}</span>}
+    </div>
+  </div>
+);
+
+// ─── Step: Goals ──────────────────────────────────────────────────────────────
+
+const GoalsStep: React.FC<StepProps> = ({ profile, set, errors }) => (
+  <div style={styles.fields}>
+    {GOALS.map((g) => (
+      <SelectCard
+        key={g.id}
+        icon={g.icon}
+        label={g.label}
+        desc={g.desc}
+        selected={profile.fitnessGoal === g.id}
+        onSelect={() => set("fitnessGoal", g.id)}
+      />
+    ))}
+    {errors.fitnessGoal && (
+      <span style={styles.errorMsg}>{errors.fitnessGoal}</span>
+    )}
+  </div>
+);
+
+// ─── Step: Level ──────────────────────────────────────────────────────────────
+
+const LevelStep: React.FC<StepProps> = ({ profile, set, errors }) => (
+  <div style={styles.fields}>
+    {LEVELS.map((l) => (
+      <SelectCard
+        key={l.id}
+        icon={l.icon}
+        label={l.label}
+        desc={l.desc}
+        selected={profile.fitnessLevel === l.id}
+        onSelect={() => set("fitnessLevel", l.id)}
+      />
+    ))}
+    {errors.fitnessLevel && (
+      <span style={styles.errorMsg}>{errors.fitnessLevel}</span>
+    )}
+  </div>
+);
+
+// ─── Shared: SelectCard ───────────────────────────────────────────────────────
+
+interface SelectCardProps {
+  icon: string;
+  label: string;
+  desc: string;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+const SelectCard: React.FC<SelectCardProps> = ({
+  icon,
+  label,
+  desc,
+  selected,
+  onSelect,
+}) => (
+  <div
+    style={{
+      ...styles.card,
+      ...(selected ? styles.cardSelected : {}),
+    }}
+    onClick={onSelect}
+  >
+    <span style={styles.cardIcon}>{icon}</span>
+    <div>
+      <p style={styles.cardLabel}>{label}</p>
+      <p style={styles.cardDesc}>{desc}</p>
+    </div>
+    <div
+      style={{
+        ...styles.radio,
+        ...(selected ? styles.radioSelected : {}),
+      }}
+    >
+      {selected && <div style={styles.radioDot} />}
+    </div>
+  </div>
+);
+
+// ─── Shared: UnitToggle ───────────────────────────────────────────────────────
+
+interface UnitToggleProps {
+  options: string[];
+  value: string;
+  onChange: (val: string) => void;
+}
+
+const UnitToggle: React.FC<UnitToggleProps> = ({ options, value, onChange }) => (
+  <div style={styles.unitToggle}>
+    {options.map((opt) => (
+      <button
+        key={opt}
+        style={{
+          ...styles.unitBtn,
+          ...(value === opt ? styles.unitBtnActive : {}),
+        }}
+        onClick={() => onChange(opt)}
+        type="button"
+      >
+        {opt}
+      </button>
+    ))}
+  </div>
+);
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const C = {
+  orange: "#FF5722",
+  orangeLight: "#FFF3EF",
+  dark: "#111111",
+  muted: "#888888",
+  border: "#E8E8E8",
+  surface: "#F8F8F8",
+  white: "#FFFFFF",
+  error: "#E53935",
+};
+
+const styles: Record<string, React.CSSProperties> = {
+  root: {
+    display: "flex",
+    flexDirection: "column",
+    minHeight: "100vh",
+    maxWidth: 440,
+    margin: "0 auto",
+    fontFamily: "'Sora', -apple-system, BlinkMacSystemFont, sans-serif",
+    backgroundColor: C.white,
+  },
+  header: {
+    padding: "36px 24px 20px",
+    backgroundColor: C.dark,
+    color: C.white,
+  },
+  logoRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 20,
+  },
+  logoIcon: { fontSize: 22 },
+  logoText: {
+    fontSize: 16,
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    color: C.orange,
+    textTransform: "uppercase",
+  },
+  headline: {
+    fontSize: 26,
+    fontWeight: 700,
+    margin: "0 0 4px",
+    color: C.white,
+  },
+  sub: {
+    fontSize: 14,
+    color: "#AAAAAA",
+    margin: "0 0 20px",
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: "#2A2A2A",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: C.orange,
+    borderRadius: 999,
+    transition: "width 0.4s ease",
+  },
+  stepLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 8,
+    textAlign: "right",
+  },
+  body: {
+    flex: 1,
+    padding: "28px 24px 16px",
+    overflowY: "auto",
+  },
+  fields: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  fieldGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: C.dark,
+    letterSpacing: "0.02em",
+  },
+  input: {
+    height: 48,
+    padding: "0 14px",
+    borderRadius: 10,
+    border: `1.5px solid ${C.border}`,
+    fontSize: 15,
+    color: C.dark,
+    backgroundColor: C.surface,
+    outline: "none",
+    transition: "border-color 0.2s",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  inputError: {
+    height: 48,
+    padding: "0 14px",
+    borderRadius: 10,
+    border: `1.5px solid ${C.error}`,
+    fontSize: 15,
+    color: C.dark,
+    backgroundColor: "#FFF5F5",
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  inputRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+  },
+  errorMsg: {
+    fontSize: 12,
+    color: C.error,
+    marginTop: 2,
+  },
+  unitToggle: {
+    display: "flex",
+    borderRadius: 10,
+    overflow: "hidden",
+    border: `1.5px solid ${C.border}`,
+    backgroundColor: C.surface,
+  },
+  unitBtn: {
+    padding: "0 14px",
+    height: 45,
+    border: "none",
+    backgroundColor: "transparent",
+    fontSize: 13,
+    fontWeight: 500,
+    color: C.muted,
+    cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  unitBtnActive: {
+    backgroundColor: C.orange,
+    color: C.white,
+    fontWeight: 700,
+  },
+  card: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    padding: "16px 16px",
+    borderRadius: 14,
+    border: `1.5px solid ${C.border}`,
+    backgroundColor: C.surface,
+    cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  cardSelected: {
+    border: `2px solid ${C.orange}`,
+    backgroundColor: C.orangeLight,
+  },
+  cardIcon: { fontSize: 26 },
+  cardLabel: {
+    fontSize: 15,
+    fontWeight: 600,
+    color: C.dark,
+    margin: 0,
+  },
+  cardDesc: {
+    fontSize: 12,
+    color: C.muted,
+    margin: "2px 0 0",
+  },
+  radio: {
+    marginLeft: "auto",
+    width: 20,
+    height: 20,
+    borderRadius: "50%",
+    border: `2px solid ${C.border}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    transition: "border-color 0.2s",
+  },
+  radioSelected: {
+    border: `2px solid ${C.orange}`,
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: "50%",
+    backgroundColor: C.orange,
+  },
+  footer: {
+    padding: "16px 24px 32px",
+    display: "flex",
+    gap: 12,
+  },
+  btnPrimary: {
+    flex: 1,
+    height: 52,
+    backgroundColor: C.orange,
+    color: C.white,
+    border: "none",
+    borderRadius: 14,
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer",
+    letterSpacing: "0.02em",
+    transition: "opacity 0.2s",
+  },
+  btnSecondary: {
+    height: 52,
+    width: 90,
+    backgroundColor: C.surface,
+    color: C.dark,
+    border: `1.5px solid ${C.border}`,
+    borderRadius: 14,
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "opacity 0.2s",
+  },
+};
+
+export default ProfileSetup;

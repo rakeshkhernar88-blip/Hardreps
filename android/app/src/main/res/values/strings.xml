@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">HardRepsV2</string>
+    <string name="title_activity_main">HardRepsV2</string>
+    <string name="package_name">com.hardreps.app</string>
+    <string name="custom_url_scheme">com.hardreps.app</string>
+</resources>
