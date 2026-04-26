@@ -119,7 +119,7 @@ const runPredict = (inp: PredictorInput, ci: WeeklyCheckin): PredictionResult =>
 // ─── Gemini ───────────────────────────────────────────────────────────────────
 
 const callGemini = async (prompt: string): Promise<string> => {
-  const key = "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";
+  const key = import.meta.env.VITE_GROQ_API_KEY || "";
   if (!key) return '⚠️ VITE_GROQ_API_KEY .env mein set nahi hai.';
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
