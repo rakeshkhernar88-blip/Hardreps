@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const GEMINI_API_KEY = "YAHAN_APNA_KEY_PASTE_KARO";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const FALLBACK_TIPS = [
   "💪 Har week 2.5kg weight badhao — progressive overload hi growth ka raaz hai!",
@@ -73,20 +73,23 @@ export default function AiCoach() {
         parts: [{ text: m.text }]
       }));
 
-      const res = await fetch(GEMINI_URL, {
+      const res = await fetch(GROQ_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: `You are an expert AI Fitness Coach in HardReps app. ${fitContext}. Be motivating, direct, mix Hindi/Hinglish naturally. Keep responses under 80 words. No markdown. End with emoji.` }]
-          },
-          contents: [...history, { role: 'user', parts: [{ text: msgText }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 250 }
+          model: "llama-3.1-8b-instant",
+          messages: [
+            { role: "system", content: `You are an expert AI Fitness Coach in HardReps app. ${fitContext}. Be motivating, direct, mix Hindi/Hinglish naturally. Keep responses under 80 words. No markdown. End with emoji.` },
+            ...messages.slice(-6).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+            { role: "user", content: msgText }
+          ],
+          max_tokens: 250,
+          temperature: 0.8
         }),
       });
 
       const data = await res.json();
-      const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      const replyText = data?.choices?.[0]?.message?.content
         || `Coach busy hai! Tip: ${FALLBACK_TIPS[Math.floor(Math.random() * FALLBACK_TIPS.length)]}`;
 
       setMessages(prev => [...prev, {
