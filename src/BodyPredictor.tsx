@@ -119,22 +119,21 @@ const runPredict = (inp: PredictorInput, ci: WeeklyCheckin): PredictionResult =>
 // ─── Gemini ───────────────────────────────────────────────────────────────────
 
 const callGemini = async (prompt: string): Promise<string> => {
-  const key = (import.meta as any).env?.VITE_GEMINI_API_KEY ?? 'AIzaSyBTfKGBgkp7xxaxWMa5Lg0fVektzd4j5S0';
-  if (!key) return '⚠️ VITE_GEMINI_API_KEY .env mein set nahi hai.';
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 400 },
-      }),
-    }
-  );
+  const key = "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";
+  if (!key) return '⚠️ VITE_GROQ_API_KEY .env mein set nahi hai.';
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 400,
+      temperature: 0.7,
+    }),
+  });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? 'No response.';
+  return data.choices?.[0]?.message?.content ?? 'No response.';
 };
 
 // ─── UI Constants ─────────────────────────────────────────────────────────────

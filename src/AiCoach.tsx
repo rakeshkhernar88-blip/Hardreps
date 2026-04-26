@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GROQ_API_KEY = "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";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const FALLBACK_TIPS = [
@@ -75,7 +75,7 @@ export default function AiCoach() {
 
       const res = await fetch(GROQ_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
           messages: [
