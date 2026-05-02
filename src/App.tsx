@@ -7,9 +7,10 @@ import BodyPredictor from './BodyPredictor';
 import PRTracker from './PRTracker';
 import BMICalculator from './BMICalculator';
 import BodyMeasurements from './BodyMeasurements';
+import AiCoach from './AiCoach';
 import ProfileSetup from './ProfileSetup';
 import type { UserProfile } from './ProfileSetup';
-type ViewType = 'login' | 'home' | 'train' | 'stats' | 'board' | 'journal' | 'sleep' | 'predictor' | 'profile' | 'pr' | 'bmi' | 'measurements';
+type ViewType = 'login' | 'home' | 'coach' | 'train' | 'stats' | 'board' | 'journal' | 'sleep' | 'predictor' | 'profile' | 'pr' | 'bmi' | 'measurements';
 
 interface Toast {
   id: number;
@@ -80,16 +81,16 @@ const MOODS = ['😊','💪','😴','🔥','😤','🧘','😰','🏆'];
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'home',    label: 'HOME',    icon: '⚡' },
+  { id: 'coach',   label: 'COACH',   icon: '🤖' },
   { id: 'train',   label: 'TRAIN',   icon: '🏋️' },
   { id: 'stats',   label: 'STATS',   icon: '📊' },
   { id: 'board',   label: 'BOARD',   icon: '🎯' },
   { id: 'journal', label: 'JOURNAL', icon: '📝' },
-
   { id: 'predictor', label: 'PREDICT', icon: '🔮' },
-{ id: 'sleep',   label: 'SLEEP',   icon: '🌙' },
-{ id: 'pr', label: 'PR', icon: '🏆' },
-{ id: 'bmi', label: 'BMI', icon: '⚖️' },
-{ id: 'measurements', label: 'BODY', icon: '📏' },
+  { id: 'sleep',   label: 'SLEEP',   icon: '🌙' },
+  { id: 'pr', label: 'PR', icon: '🏆' },
+  { id: 'bmi', label: 'BMI', icon: '⚖️' },
+  { id: 'measurements', label: 'BODY', icon: '📏' },
 ];
 
 const FITNESS_SCOPES = [
@@ -1309,7 +1310,8 @@ export default function App() {
             ))}
           </motion.div>
         )}
-{currentView === 'predictor' && <BodyPredictor />}        {/* SLEEP */}
+{currentView === 'predictor' && <BodyPredictor />}
+{currentView === 'coach' && <AiCoach />}
 {currentView === 'pr' && <PRTracker />}
 {currentView === 'bmi' && <BMICalculator />}
 {currentView === 'measurements' && <BodyMeasurements />}

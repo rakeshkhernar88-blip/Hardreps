@@ -79,7 +79,7 @@ export default function AiCoach() {
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
           messages: [
-            { role: "system", content: `You are an expert AI Fitness Coach in HardReps app. ${fitContext}. Be motivating, direct, mix Hindi/Hinglish naturally. Keep responses under 80 words. No markdown. End with emoji.` },
+            { role: "system", content: `You are an expert AI Fitness Coach in HardReps app. ${fitContext}. Always detect reminder intent first. If the user asks to set a reminder, immediately reply by requesting date, time, and emotion tone only. Do not ask about weight, age, or other profile details when the user is asking for a reminder. Be motivating, direct, mix Hindi/Hinglish naturally. Keep responses under 80 words. No markdown. End with emoji.` },
             ...messages.slice(-6).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
             { role: "user", content: msgText }
           ],
