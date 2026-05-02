@@ -68,10 +68,6 @@ export default function AiCoach() {
 
     try {
       const fitContext = getFitContext();
-      const history = messages.slice(-6).map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }]
-      }));
 
       const res = await fetch(GROQ_URL, {
         method: 'POST',

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import type { FitDataType } from './App';
 
 
 interface WeightEntry {
@@ -82,12 +83,12 @@ export const StatsView = ({ fitData, nextSyncIn }: Props) => {
 
       {/* ── Summary Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-        {[
+        {([
           ['Total Steps', fitData.steps.weeklyData.reduce((a,b)=>a+b,0).toLocaleString(), '#E8FF6B', '🦶'],
           ['Avg Sleep',   `${fitData.sleep.hours}h`, '#6B8EFF', '😴'],
           ['Avg HR',      String(fitData.heartRate.avg || '—'), '#FF6B6B', '❤️'],
           ['Max HR',      String(fitData.heartRate.max || '—'), '#FBBC04', '🔥'],
-        ].map(([label, val, color, ic], i) => (
+        ] as const).map(([label, val, color, ic], i) => (
           <motion.div key={i}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
@@ -243,7 +244,7 @@ export const StatsView = ({ fitData, nextSyncIn }: Props) => {
         <div style={{ fontSize: 12, color: '#555', letterSpacing: 1, marginBottom: 14, textTransform: 'uppercase' }}>
           Daily Breakdown
         </div>
-        {fitData.steps.weeklyData.map((steps, i) => (
+        {fitData.steps.weeklyData.map((steps: number, i: number) => (
           <div key={i} style={{
             display: 'flex', alignItems: 'center', gap: 10,
             marginBottom: 12, paddingBottom: 12,
