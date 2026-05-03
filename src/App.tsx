@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 import BodyPredictor from './BodyPredictor';
 import PRTracker from './PRTracker';
@@ -588,6 +589,30 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    GoogleAuth.initialize({
+      clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+      scopes: [
+        'profile',
+        'email',
+        'https://www.googleapis.com/auth/fitness.activity.read',
+        'https://www.googleapis.com/auth/fitness.body.read',
+        'https://www.googleapis.com/auth/fitness.sleep.read',
+        'https://www.googleapis.com/auth/fitness.heart_rate.read',
+      ],
+      grantOfflineAccess: true,
+    });
+  }, []);
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem('fit_token');
+    if (savedToken) {
+      setAccessToken(savedToken);
+      syncFitData(savedToken, true, false);
+      startAutoSync(savedToken);
+    }
+  }, []);
+
   const addAutoJournalEntry = useCallback((steps: number, hr: number) => {
     const hour = new Date().getHours();
     const { date, time, timestamp } = getNowStrings();
@@ -690,6 +715,22 @@ export default function App() {
   const handleRefresh = () => {
     if (accessToken) { syncFitData(accessToken, false, true); startAutoSync(accessToken); }
     else showToast('No access token','error');
+  };
+
+  const handleGoogleFitConnect = async () => {
+    try {
+      const result = await GoogleAuth.signIn();
+      const token = result.authentication.accessToken;
+      if (token) {
+        setAccessToken(token);
+        localStorage.setItem('fit_token', token);
+        syncFitData(token, false, true);
+        startAutoSync(token);
+        showToast('Google Fit connected!', 'success');
+      }
+    } catch (error: any) {
+      showToast(`Google Fit error: ${error.message}`, 'error');
+    }
   };
 
   const handleSignOut = async () => {
@@ -845,6 +886,25 @@ export default function App() {
               </div>
               {lastSynced&&!refreshing&&<div style={{ fontSize:10,color:'#333',background:'#0a0a0a',padding:'3px 8px',borderRadius:8 }}>next {nextSyncIn}s</div>}
             </motion.div>
+
+            {!accessToken && (
+              <button
+                onClick={handleGoogleFitConnect}
+                style={{
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  marginBottom: 12,
+                }}
+              >
+                Connect Google Fit
+              </button>
+            )}
 
             <motion.div initial={{ opacity:0,y:10 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.1 }}
               style={{ background:'#1A1A1A',borderRadius:24,padding:20,border:'1px solid #222',marginBottom:14 }}>
