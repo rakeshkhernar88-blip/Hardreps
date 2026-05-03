@@ -252,19 +252,23 @@ const analyzeWorkout = (exercises: WorkoutExercise[]): string => {
 };
 
 const requestNotificationPermission = async () => {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  return result === 'granted';
+  try {
+    const result = await LocalNotifications.requestPermissions();
+    return result.display === 'granted';
+  } catch {
+    return false;
+  }
 };
 
 const sendNotification = (title: string, body: string) => {
-  if (Notification.permission !== 'granted') return;
-  try {
-    new Notification(title, { body, icon: '/favicon.ico', tag: 'hardreps-' + Date.now() });
-    playSound('notify');
-  } catch { /* silent */ }
+  LocalNotifications.schedule({
+    notifications: [{
+      id: Math.floor(Math.random() * 10000),
+      title,
+      body,
+      schedule: { at: new Date(Date.now() + 100) },
+    }]
+  }).catch(() => {});
 };
 
 const fetchGoogleFitData = async (accessToken: string) => {
