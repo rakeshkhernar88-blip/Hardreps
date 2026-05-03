@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "929759657646",
+    "project_id": "hardreps-ff028",
+    "storage_bucket": "hardreps-ff028.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:929759657646:android:3783b8e3042adbe026373f",
+        "android_client_info": {
+          "package_name": "com.hardreps.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1Dx8jjnTOuGaL88pUTKu86bIT9JZjCMk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

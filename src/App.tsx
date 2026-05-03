@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 import BodyPredictor from './BodyPredictor';
 import PRTracker from './PRTracker';
@@ -10,6 +10,7 @@ import BodyMeasurements from './BodyMeasurements';
 import AiCoach from './AiCoach';
 import ProfileSetup from './ProfileSetup';
 import type { UserProfile } from './ProfileSetup';
+
 type ViewType = 'login' | 'home' | 'coach' | 'train' | 'stats' | 'board' | 'journal' | 'sleep' | 'predictor' | 'profile' | 'pr' | 'bmi' | 'measurements';
 
 interface Toast {
@@ -91,13 +92,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'pr', label: 'PR', icon: '🏆' },
   { id: 'bmi', label: 'BMI', icon: '⚖️' },
   { id: 'measurements', label: 'BODY', icon: '📏' },
-];
-
-const FITNESS_SCOPES = [
-  'https://www.googleapis.com/auth/fitness.activity.read',
-  'https://www.googleapis.com/auth/fitness.body.read',
-  'https://www.googleapis.com/auth/fitness.sleep.read',
-  'https://www.googleapis.com/auth/fitness.heart_rate.read',
 ];
 
 const AUTO_REFRESH_MS = 30_000;
@@ -364,25 +358,6 @@ const deriveSleepSummary = (nights: NightSleepData[]) => {
   return { hours:String(last.totalHours), quality:sleepQualityMeta(last.qualityScore).label };
 };
 
-const loadGIS = (_clientId: string): Promise<void> =>
-  new Promise((resolve, reject) => {
-    if ((window as any).google?.accounts?.oauth2) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
-    s.onload = () => resolve(); s.onerror = () => reject(new Error('GIS load failed'));
-    document.head.appendChild(s);
-  });
-
-const webSignIn = (clientId: string): Promise<string> =>
-  loadGIS(clientId).then(() => new Promise((resolve, reject) => {
-    const tc = (window as any).google.accounts.oauth2.initTokenClient({
-      client_id: clientId, scope: FITNESS_SCOPES.join(' '),
-      callback: (resp: any) => resp.access_token ? resolve(resp.access_token) : reject(new Error(resp.error)),
-      error_callback: (err: any) => reject(new Error(err.message)),
-    });
-    tc.requestAccessToken();
-  }));
-
 const JOURNAL_KEY = 'hardreps_journals_v3';
 const loadJournals = (): JournalEntry[] => { try { return JSON.parse(localStorage.getItem(JOURNAL_KEY)||'[]'); } catch { return []; } };
 const saveJournals = (j: JournalEntry[]) => { try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(j)); } catch { /* */ } };
@@ -462,11 +437,13 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>('login');
   const [user, setUser] = useState<any>(null);
   const [accessToken, setAccessToken] = useState<string>('');
-  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [googleAuthPlugin, setGoogleAuthPlugin] = useState<any>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState('+91');
+  const [otp, setOtp] = useState('');
+  const [authStage, setAuthStage] = useState<'phone' | 'otp'>('phone');
+  const [verificationId, setVerificationId] = useState<string>('');
   const [nextSyncIn, setNextSyncIn] = useState(AUTO_REFRESH_MS / 1000);
   const [notifEnabled, setNotifEnabled] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);  const [showProfileSetup, setShowProfileSetup] = useState(false);
@@ -582,19 +559,33 @@ export default function App() {
   const wPoints = graphData.map((e, i) => { const x = graphData.length < 2 ? GW/2 : (i/(graphData.length-1))*GW; const y = GH - ((e.weight - minW)/wRange)*GH; return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
 
   useEffect(() => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) { console.warn('VITE_GOOGLE_CLIENT_ID not set'); return; }
-    if (Capacitor.isNativePlatform()) {
-      import('@codetrix-studio/capacitor-google-auth').then(({ GoogleAuth }) =>
-        GoogleAuth.initialize({ clientId, scopes:['profile','email',...FITNESS_SCOPES], grantOfflineAccess:true }).then(() => setGoogleAuthPlugin(GoogleAuth))
-      ).catch(console.error);
-    }
-    requestNotificationPermission().then(async (granted) => {
-  setNotifEnabled(granted);
-  if (Capacitor.isNativePlatform()) {
-    await LocalNotifications.requestPermissions();
-  }
-});
+    let phoneCodeSentListener: any;
+    let phoneVerificationCompletedListener: any;
+    const setupListeners = async () => {
+      phoneCodeSentListener = await FirebaseAuthentication.addListener('phoneCodeSent', (event) => {
+        setVerificationId(event.verificationId);
+      });
+      phoneVerificationCompletedListener = await FirebaseAuthentication.addListener('phoneVerificationCompleted', (event) => {
+        const firebaseUser = event.user;
+        const savedUser = {
+          uid: firebaseUser?.uid,
+          phoneNumber: firebaseUser?.phoneNumber,
+          displayName: firebaseUser?.displayName,
+          email: firebaseUser?.email,
+        };
+        setUser(savedUser);
+        localStorage.setItem('userToken', JSON.stringify(savedUser));
+        setCurrentView('home');
+        setOtp('');
+        setAuthStage('phone');
+        showToast('Login successful!', 'success');
+      });
+    };
+    setupListeners();
+    return () => {
+      if (phoneCodeSentListener) phoneCodeSentListener.remove();
+      if (phoneVerificationCompletedListener) phoneVerificationCompletedListener.remove();
+    };
   }, []);
 
   const addAutoJournalEntry = useCallback((steps: number, hr: number) => {
@@ -622,8 +613,17 @@ export default function App() {
       if (!silent) { playSound('success'); showToast(`✅ ${steps.today.toLocaleString()} steps synced`, 'success'); }
     } catch (err: any) {
       const msg = err?.message || 'Sync failed';
-      setSyncError(msg);
-      if (!silent) { playSound('click'); showToast(msg, 'error'); }
+      if (msg.includes('401')) {
+        // Token expired
+        localStorage.removeItem('userToken');
+        setUser(null);
+        setAccessToken('');
+        setCurrentView('login');
+        showToast('Session expired, please sign in again', 'error');
+      } else {
+        setSyncError(msg);
+        if (!silent) { playSound('click'); showToast(msg, 'error'); }
+      }
     } finally { setRefreshing(false); }
   }, [showToast]);
 
@@ -648,30 +648,38 @@ export default function App() {
     if (hourlyRef.current) clearInterval(hourlyRef.current);
   }, []);
 
-  const handleSignIn = async () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) { showToast('Google Client ID not configured', 'error'); return; }
-    setLoading(true); playSound('click');
+  const sendOtp = async () => {
     try {
-      let token = '';
-      if (Capacitor.isNativePlatform() && googleAuthPlugin) {
-        const result = await googleAuthPlugin.signIn();
-        setUser(result); token = result.authentication?.accessToken || '';
-      } else {
-        token = await webSignIn(clientId);
-        setUser({ name: 'Web User', email: 'web' });
-      }
-      if (token) {
-        setAccessToken(token);
-        await syncFitData(token, false, true);
-        startAutoSync(token);
-        setTimeout(() => { const fd = fitDataRef.current; if (fd) addAutoJournalEntry(fd.steps.today, fd.heartRate.avg); }, 2000);
-        if (!userProfile) setShowProfileSetup(true);
-        else setCurrentView('home');
-        sendNotification('⚡ HardReps Active', 'Real-time sync on!');
-      }
-    } catch (err: any) { showToast(err?.message||'Sign-in failed','error'); }
-    finally { setLoading(false); }
+      const phone = phoneNumber.trim().startsWith('+') ? phoneNumber.trim() : `+91${phoneNumber.trim()}`;
+      if (!/^[+][0-9]{10,15}$/.test(phone)) { showToast('Valid phone number chahiye', 'error'); return; }
+      await FirebaseAuthentication.signInWithPhoneNumber({ phoneNumber: phone });
+      setAuthStage('otp');
+      showToast(`OTP bhej diya ${phone}`, 'success');
+    } catch (error: any) {
+      showToast(`OTP error: ${error.message}`, 'error');
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (otp.trim().length !== 6) { showToast('6-digit OTP daalo', 'error'); return; }
+    try {
+      const result = await FirebaseAuthentication.confirmVerificationCode({ verificationId, verificationCode: otp.trim() });
+      const firebaseUser = result.user;
+      const savedUser = {
+        uid: firebaseUser?.uid,
+        phoneNumber: firebaseUser?.phoneNumber,
+        displayName: firebaseUser?.displayName,
+        email: firebaseUser?.email,
+      };
+      setUser(savedUser);
+      localStorage.setItem('userToken', JSON.stringify(savedUser));
+      setCurrentView('home');
+      setOtp('');
+      setAuthStage('phone');
+      showToast('Login successful!', 'success');
+    } catch (error: any) {
+      showToast(`OTP galat hai: ${error.message}`, 'error');
+    }
   };
 
   const handleProfileComplete = (profile: UserProfile) => {
@@ -687,12 +695,12 @@ export default function App() {
   const handleSignOut = async () => {
     [autoSyncRef, countdownRef, hourlyRef].forEach(r => { if (r.current) clearInterval(r.current); });
     try {
-      if (Capacitor.isNativePlatform() && googleAuthPlugin) await googleAuthPlugin.signOut();
-      else (window as any).google?.accounts?.oauth2?.revoke(accessToken);
+      await FirebaseAuthentication.signOut();
     } catch { /* */ }
     setUser(null); setAccessToken('');
     setFitData({ steps:{today:0,weeklyData:Array(7).fill(0),goal:10_000}, heartRate:{current:0,avg:0,max:0,min:0}, sleep:{hours:'0',quality:'No data'} });
     setSleepStages([]); setLastSynced(null); setSyncError(null);
+    localStorage.removeItem('userToken');
     setCurrentView('login'); playSound('success');
   };
 
@@ -760,19 +768,43 @@ export default function App() {
           <motion.div animate={{ scale:[1,1.06,1] }} transition={{ repeat:Infinity,duration:2.5 }}
             style={{ width:80,height:80,background:'#E8FF6B',borderRadius:24,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',fontSize:40,boxShadow:'0 0 40px #E8FF6B44' }}>⚡</motion.div>
           <div style={{ fontSize:32,fontWeight:900,color:'#fff',letterSpacing:-1 }}>HardReps</div>
-          <div style={{ fontSize:13,color:'#444',marginBottom:16,marginTop:4 }}>Voice Workout · Google Fit · Calendar</div>
+          <div style={{ fontSize:13,color:'#444',marginBottom:16,marginTop:4 }}>Phone OTP Login · HardReps</div>
           <div style={{ background:'#111',borderRadius:20,padding:'18px 24px',marginBottom:24,border:'1px solid #1a1a1a' }}>
-            <div style={{ fontSize:38,fontWeight:900,color:'#E8FF6B',letterSpacing:2 }}>
-              {liveClock.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})}
-            </div>
-            <div style={{ fontSize:13,color:'#555',marginTop:6 }}>
-              {liveClock.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
-            </div>
+            {authStage === 'phone' ? (
+              <>
+                <div style={{ fontSize:14,color:'#aaa',marginBottom:8,textAlign:'left' }}>Mobile number</div>
+                <input
+                  value={phoneNumber}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  style={{ width:'100%',borderRadius:16,border:'1px solid #2a2a2a',background:'#0d0d0d',color:'#fff',padding:'14px 16px',fontSize:14,marginBottom:16,outline:'none' }}
+                />
+                <motion.button onClick={sendOtp} whileTap={{ scale:0.97 }}
+                  style={{ width:'100%',background:'#E8FF6B',color:'#1A1A00',border:'none',fontSize:16,fontWeight:800,padding:'18px 24px',borderRadius:20,cursor:'pointer',marginBottom:12,boxShadow:'0 8px 24px #E8FF6B33' }}>
+                  Send OTP
+                </motion.button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize:14,color:'#aaa',marginBottom:8,textAlign:'left' }}>Enter OTP</div>
+                <input
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                  placeholder="6-digit OTP"
+                  maxLength={6}
+                  style={{ width:'100%',borderRadius:16,border:'1px solid #2a2a2a',background:'#0d0d0d',color:'#fff',padding:'14px 16px',fontSize:14,marginBottom:16,outline:'none' }}
+                />
+                <motion.button onClick={verifyOtp} whileTap={{ scale:0.97 }}
+                  style={{ width:'100%',background:'#E8FF6B',color:'#1A1A00',border:'none',fontSize:16,fontWeight:800,padding:'18px 24px',borderRadius:20,cursor:'pointer',marginBottom:12,boxShadow:'0 8px 24px #E8FF6B33' }}>
+                  Verify OTP
+                </motion.button>
+                <motion.button onClick={() => { setAuthStage('phone'); setOtp(''); }} whileTap={{ scale:0.97 }}
+                  style={{ width:'100%',background:'#1a1a1a',color:'#aaa',border:'1px solid #2a2a2a',fontSize:14,fontWeight:700,padding:'14px 20px',borderRadius:20,cursor:'pointer' }}>
+                  Change Number
+                </motion.button>
+              </>
+            )}
           </div>
-          <motion.button onClick={handleSignIn} disabled={loading} whileTap={{ scale:0.97 }}
-            style={{ width:'100%',background:'#E8FF6B',color:'#1A1A00',border:'none',fontSize:16,fontWeight:800,padding:'18px 24px',borderRadius:20,cursor:'pointer',opacity:loading?0.7:1,marginBottom:14,boxShadow:'0 8px 24px #E8FF6B33' }}>
-            {loading?'🔄 Connecting…':'🔗 Sign in with Google'}
-          </motion.button>
         </motion.div>
       </div>
     </>
