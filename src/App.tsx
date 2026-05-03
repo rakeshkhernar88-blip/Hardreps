@@ -617,6 +617,14 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const today = new Date().toDateString();
+    const notifiedDay = localStorage.getItem('goal_notified_today');
+    if (notifiedDay && notifiedDay !== today) {
+      localStorage.removeItem('goal_notified_today');
+    }
+  }, []);
+
   const addAutoJournalEntry = useCallback((steps: number, hr: number) => {
     const hour = new Date().getHours();
     const { date, time, timestamp } = getNowStrings();
@@ -636,7 +644,10 @@ export default function App() {
       setFitData({ steps, heartRate, sleep: sleepSum });
       setSleepStages(nights); setLastSynced(new Date()); setNextSyncIn(AUTO_REFRESH_MS / 1000);
       if (notify) {
-        if (steps.today >= steps.goal) sendNotification('🎉 Goal Complete!', `${steps.today.toLocaleString()} steps — aaj ka goal poora!`);
+        if (steps.today >= steps.goal && !localStorage.getItem('goal_notified_today')) {
+          localStorage.setItem('goal_notified_today', new Date().toDateString());
+          sendNotification('🎉 Goal Complete!', `${steps.today.toLocaleString()} steps — aaj ka goal poora!`);
+        }
         if (heartRate.current > 140) sendNotification('❤️ High HR Alert', `${heartRate.current} bpm — thoda rest lo!`);
       }
       if (!silent) { playSound('success'); showToast(`✅ ${steps.today.toLocaleString()} steps synced`, 'success'); }
